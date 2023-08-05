@@ -88,14 +88,15 @@ if __name__ == '__main__':
     bitcoin.create_new_block(123, 'abc', '')
     bitcoin.create_new_transaction(66, 'ABC', 'CDE')
     print(bitcoin.to_json())
-    print("----------------")
+    print("=" * 20)
 
     bitcoin.create_new_block(123, 'abc', '')
     print(bitcoin.to_json())
-    print("================")
+    print("=" * 20)
 
     bitcoin.create_new_transaction(77, 'XYZ1', 'CDE1')
     bitcoin.create_new_transaction(88, 'XYZ2', 'CDE2')
     bitcoin.create_new_transaction(99, 'XYZ2', 'CDE3')
     bitcoin.create_new_block(123, 'abc', '')
     print(bitcoin.to_json())
+    print("=" * 20)
