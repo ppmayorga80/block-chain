@@ -1,7 +1,10 @@
+import hashlib
 import json
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
+from itertools import count
 
+import jsons
 import pytz
 
 
@@ -20,7 +23,7 @@ class Block:
     timestamp: float
     transactions: list[Transaction]
     nonce: int
-    hash: str
+    hash_str: str
     prev_hash: str
 
 
@@ -30,11 +33,16 @@ class BlockChain:
     chain: list[Block] = field(default_factory=list)
     pending_transactions: list[Transaction] = field(default_factory=list)
 
-    def to_json(self):
+    def to_json_string(self):
         """returns the json representation of current object"""
         x = asdict(self)
         x_str = json.dumps(x, indent=3)
         return x_str
+
+    def to_json(self):
+        """returns the json representation of current object"""
+        x = asdict(self)
+        return x
 
     def create_new_block(self, nonce: int, cur_hash: str, prev_hash: str) -> Block:
         """ 1. Create a new block,
@@ -52,7 +60,7 @@ class BlockChain:
             timestamp=datetime.now(pytz.utc).timestamp(),
             transactions=self.pending_transactions,
             nonce=nonce,
-            hash=cur_hash,
+            hash_str=cur_hash,
             prev_hash=prev_hash
         )
         # 2. add new block to the chain
@@ -62,41 +70,70 @@ class BlockChain:
 
         return new_block
 
+    def create_genesis_block(self):
+        """Create the block at the beginning of the chain"""
+        return self.create_new_block(
+            nonce=100, cur_hash="0000", prev_hash="00"
+        )
+
     def get_last_block(self) -> Block or None:
         """get last block"""
         return self.chain[-1] if self.chain else None
 
-    def create_new_transaction(self, amount: int, sender: str, recipient: str) -> int:
+    def create_new_transaction(self, transaction: Transaction) -> int:
         """create a new transaction and add it to the pending transaction list
-        :param amount: the amount to be set
-        :param sender: the sender id
-        :param recipient: the recipient id
+        :param transaction: the transaction information
         :return: and id of the next block
         """
-        new_transaction = Transaction(
-            amount=amount,
-            sender=sender,
-            recipient=recipient
-        )
-        self.pending_transactions.append(new_transaction)
+        self.pending_transactions.append(transaction)
         last_block = self.get_last_block()
         return last_block.index + 1
 
+    @classmethod
+    def hash_block(cls, nonce: int, prev_hash: str, transactions: list[Transaction]) -> str:
+        """hash the given block
+        :param nonce: the nonce value to be used
+        :param prev_hash: previous hash i.e. the hash_str of previous block
+        :param transactions: the block to be hashed
+        :return: the hashed string
+        """
+        transactions_str = jsons.dumps(transactions)
+        data_str = f"{prev_hash}{nonce}{transactions_str}"
+        hashed_data_str = hashlib.sha256(data_str.encode('UTF8')).hexdigest()
+        return hashed_data_str.upper()
 
-if __name__ == '__main__':
-    bitcoin = BlockChain()
-    bitcoin.create_new_block(123, 'abc', '')
-    bitcoin.create_new_transaction(66, 'ABC', 'CDE')
-    print(bitcoin.to_json())
-    print("=" * 20)
+    @classmethod
+    def _validate_hash(cls, hash_str: str) -> bool:
+        """Validate the hash string with a given logic:
+        option a: the hash string starts with 4 zeros in a row
+        option b: the hash string contains the first 4 prime numbers
+                  in that position for example '2' at position 2 and
+                  '5' at position 5.
+        :param hash_str: the hash string to be validated
+        :return: true if validation was successful or false otherwise
+        """
+        pos = [2, 3, 5, 7]
+        flag = all(hash_str[k] == f"{k}" for k in pos)
+        return flag
 
-    bitcoin.create_new_block(123, 'abc', '')
-    print(bitcoin.to_json())
-    print("=" * 20)
-
-    bitcoin.create_new_transaction(77, 'XYZ1', 'CDE1')
-    bitcoin.create_new_transaction(88, 'XYZ2', 'CDE2')
-    bitcoin.create_new_transaction(99, 'XYZ2', 'CDE3')
-    bitcoin.create_new_block(123, 'abc', '')
-    print(bitcoin.to_json())
-    print("=" * 20)
+    @classmethod
+    def proof_of_work(cls, prev_hash, transactions: list[Transaction]) -> tuple[int, str]:
+        """compute a valid nonce and return it with the hash string
+        brute force method: try with all values for nonce starting
+        at zero until find a valid hash string
+        :param prev_hash: the hash string of previous block
+        :param transactions: the block to be used as a proof of work
+        """
+        valid_nonce = -1
+        valid_hash_str = ""
+        for nonce in count():
+            hash_str = cls.hash_block(
+                nonce=nonce,
+                prev_hash=prev_hash,
+                transactions=transactions
+            )
+            if cls._validate_hash(hash_str=hash_str):
+                valid_nonce = nonce
+                valid_hash_str = hash_str
+                break
+        return valid_nonce, valid_hash_str
